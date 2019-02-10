@@ -2,10 +2,11 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const graphqlHttp = require("express-graphql");
 const { buildSchema } = require("graphql");
+const mongoose = require("mongoose");
+
+const Event = require("./models/event");
 
 const app = express();
-
-const events = [];
 
 app.use(bodyParser.json());
 
@@ -43,17 +44,34 @@ app.use(
     `),
     rootValue: {
       events: () => {
+        return Event.find()
+          .then(events => {
+            return events.map(event => {
+              return { ...event._doc, _id: event.id };
+            });
+          })
+          .catch(err => {
+            throw err;
+          });
         return events;
       },
       createEvent: args => {
-        const event = {
-          _id: Math.random().toString(),
+        const event = new Event({
           title: args.eventInput.title,
           description: args.eventInput.description,
           price: +args.eventInput.price,
-          date: args.eventInput.date
-        };
-        events.push(event);
+          date: new Date(args.eventInput.date)
+        });
+        return event
+          .save()
+          .then(result => {
+            console.log(result);
+            return { ...result._doc, _id: result._doc._id.toString() };
+          })
+          .catch(err => {
+            console.log(err);
+            throw err;
+          });
         return event;
       }
     },
@@ -61,4 +79,15 @@ app.use(
   })
 );
 
-app.listen(3000);
+mongoose
+  .connect(
+    `mongodb+srv://${process.env.MONGO_USER}:${
+      process.env.MONGO_PASSWORD
+    }@cluster0-nwqrn.mongodb.net/${process.env.MONGO_DB}?retryWrites=true`
+  )
+  .then(() => {
+    app.listen(3000);
+  })
+  .catch(err => {
+    console.log(err);
+  });
